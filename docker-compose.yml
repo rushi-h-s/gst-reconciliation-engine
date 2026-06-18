@@ -1,0 +1,61 @@
+version: "3.9"
+
+# External: Supabase cloud (REST + Storage) and Ollama — supply URLs via .env.
+# Local:    FastAPI, worker, and a pgmq-enabled Postgres for the queue transport.
+
+services:
+
+  # ── Message queue (pgmq on Postgres) ──────────────────────────────────────
+  pgmq_db:
+    image: quay.io/tembo/pgmq-pg16:latest
+    environment:
+      POSTGRES_DB: gst_queue
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"   # 5433 avoids clash with any local Postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d gst_queue"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - pgmq_data:/var/lib/postgresql/data
+      - ./scripts/init_pgmq.sql:/docker-entrypoint-initdb.d/01_init_pgmq.sql:ro
+
+  # ── FastAPI ────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      # Override SUPABASE_DB_URL to point at the local pgmq_db container.
+      # Supabase cloud is still used for REST (SUPABASE_URL) and Storage.
+      SUPABASE_DB_URL: postgresql://postgres:postgres@pgmq_db:5432/gst_queue
+    depends_on:
+      pgmq_db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/code
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: on-failure
+
+  # ── Background worker ──────────────────────────────────────────────────────
+  worker:
+    build:
+      context: ./backend
+    env_file: .env
+    environment:
+      SUPABASE_DB_URL: postgresql://postgres:postgres@pgmq_db:5432/gst_queue
+    depends_on:
+      pgmq_db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/code
+    command: python worker.py
+    restart: on-failure
+
+volumes:
+  pgmq_data:
