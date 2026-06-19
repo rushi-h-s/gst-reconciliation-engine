@@ -1,3 +1,4 @@
+import math
 import uuid
 from datetime import datetime, timezone
 
@@ -50,6 +51,7 @@ async def get_results(
         "total_count": total_count,
         "page": page,
         "page_size": page_size,
+        "total_pages": max(1, math.ceil(total_count / page_size)),
     }
 
 

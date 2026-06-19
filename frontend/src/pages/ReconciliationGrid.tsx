@@ -68,7 +68,7 @@ export default function ReconciliationGrid({ orgId, clientId, period }: Props) {
     )
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json() as Promise<{ results: MatchResult[]; total_count: number; page: number; page_size: number }>;
+        return r.json() as Promise<{ results: MatchResult[]; total_count: number; page: number; page_size: number; total_pages: number }>;
       })
       .then((data) => {
         setResults(data.results);
@@ -210,8 +210,7 @@ export default function ReconciliationGrid({ orgId, clientId, period }: Props) {
             ← Prev
           </button>
           <span style={styles.pageInfo}>
-            Page {page} of {totalPages}
-            <span style={styles.pageTotal}> — {totalCount} total</span>
+            Showing {Math.min((page - 1) * PAGE_SIZE + 1, totalCount)}–{Math.min(page * PAGE_SIZE, totalCount)} of {totalCount}
           </span>
           <button
             style={{ ...styles.pageBtn, opacity: page >= totalPages ? 0.4 : 1 }}
